@@ -462,6 +462,14 @@ not by convention.
 
 ## Minimum Delay
 
+There is exactly one place these two defaults live: `MIN_EMAIL_DELAY` / `MAX_EMAILS_PER_HOUR` in
+`.env`. The schedule request body may omit `delayBetweenEmails`/`hourlyLimit` entirely - Zod leaves
+them `undefined` rather than applying a duplicate hardcoded default, and
+`emailController.schedule()` falls back to `env.MIN_EMAIL_DELAY` / `env.MAX_EMAILS_PER_HOUR` only at
+that single point. The frontend mirrors the same value (rather than hardcoding its own `2`/`100`)
+by calling `GET /api/config/defaults` and pre-filling the compose form with whatever this
+environment is actually configured with.
+
 `MIN_EMAIL_DELAY` (seconds) is enforced per-sender via the same Redis Lua script as the hourly
 limit (`services/rateLimiter.ts`): a `email-delay:{senderId}` key stores the epoch-ms timestamp the
 sender is next allowed to send at, checked and (on success) advanced atomically in one round trip.
@@ -539,7 +547,11 @@ npm test
   `docker compose up -d` first to include it.
 
 Current result in this environment (no Docker access, so the Redis suite auto-skips):
-**27 passed, 3 skipped**, 0 failed.
+**28 passed, 3 skipped**, 0 failed.
+
+`npm run lint` (both `apps/backend` and `apps/frontend`, ESLint 9 flat config + `typescript-eslint`)
+passes with **0 errors, 0 warnings**, alongside `npm run typecheck` and `npm run build` in both
+workspaces.
 
 ## Demo Instructions
 
@@ -574,7 +586,10 @@ Once Docker + real Google/Slack credentials are available (≤5 minutes):
 - "Sender" is a lightweight per-user "from" identity, not a full mailbox connection; all sends
   physically go out through one shared Ethereal transport, which is exactly what Ethereal is for -
   it is a catch-all SMTP sink, not a real delivery network, so a distinct SMTP login per sender
-  would add complexity without adding realism in this environment.
+  would add complexity without adding realism in this environment. A user can add any number of
+  senders (`POST /api/senders`, or the "+ Add sender" control in the compose modal), and the hourly
+  rate limit/min-delay state is fully isolated per `senderId`, so this still exercises real
+  multi-sender behavior end-to-end.
 - CSV lead lists are assumed to have the email address in the first column when a comma is present;
   a bare one-per-line text file is equally supported.
 - "Hourly limit" and "minimum delay" are properties of a *campaign* (and therefore effectively of
