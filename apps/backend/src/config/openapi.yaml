@@ -202,6 +202,31 @@ paths:
       security: [{ cookieAuth: [] }]
       responses:
         '200': { description: List of senders }
+    post:
+      summary: Add a new sender identity for the current user
+      description: Supports sending campaigns from multiple distinct senders, each with its own hourly rate limit bucket.
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, displayName]
+              properties:
+                email: { type: string, format: email }
+                displayName: { type: string }
+      responses:
+        '201': { description: Sender created }
+        '400': { description: Validation error }
+        '409': { description: A sender with this email already exists for this user }
+  /api/config/defaults:
+    get:
+      summary: Get the server's configured scheduling defaults
+      description: Returns MIN_EMAIL_DELAY / MAX_EMAILS_PER_HOUR / WORKER_CONCURRENCY so the frontend never hardcodes a duplicate of the env-configured values.
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: Scheduling defaults }
   /api/slack/status:
     get:
       summary: Get the current user's Slack connection status

@@ -8,8 +8,13 @@ export const scheduleEmailsSchema = z.object({
   startTime: z.coerce.date().refine((d) => d.getTime() > Date.now() - 60_000, {
     message: 'startTime must not be in the past',
   }),
-  delayBetweenEmails: z.coerce.number().int().min(0).max(3600).default(2),
-  hourlyLimit: z.coerce.number().int().min(1).max(100_000).default(100),
+  // No .default() here on purpose: the configured defaults come from
+  // MIN_EMAIL_DELAY / MAX_EMAILS_PER_HOUR (see config/env.ts), applied in
+  // emailController.schedule(), so there is exactly one place that owns the
+  // "no hardcoded limits" default rather than duplicating a magic number in
+  // both the validation schema and the frontend.
+  delayBetweenEmails: z.coerce.number().int().min(0).max(3600).optional(),
+  hourlyLimit: z.coerce.number().int().min(1).max(100_000).optional(),
 });
 
 export type ScheduleEmailsBody = z.infer<typeof scheduleEmailsSchema>;

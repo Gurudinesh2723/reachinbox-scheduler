@@ -24,6 +24,13 @@ export function findSenderForUser(senderId: string, userId: string) {
   return prisma.sender.findFirst({ where: { id: senderId, userId }, select: PUBLIC_SENDER_SELECT });
 }
 
+export function createSender(userId: string, email: string, displayName: string) {
+  return prisma.sender.create({
+    data: { userId, email, displayName },
+    select: PUBLIC_SENDER_SELECT,
+  });
+}
+
 /** Ensures every user has at least one usable sender identity to compose from. */
 export async function getOrCreateDefaultSender(userId: string, fallbackEmail: string, fallbackName: string) {
   const existing = await prisma.sender.findFirst({ where: { userId, active: true } });

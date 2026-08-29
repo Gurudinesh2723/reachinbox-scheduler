@@ -114,15 +114,28 @@ describe('scheduleEmailsSchema validation', () => {
     expect(result.success).toBe(false);
   });
 
-  it('accepts a valid payload and applies defaults', () => {
+  it('accepts a valid payload with delay/hourlyLimit omitted (defaults are applied later from env, not in the schema)', () => {
     const result = scheduleEmailsSchema.parse({
       subject: 'Hi',
       body: 'Body',
       recipients: ['a@b.com', 'a@b.com'],
       startTime: new Date(Date.now() + 60_000).toISOString(),
     });
-    expect(result.delayBetweenEmails).toBe(2);
-    expect(result.hourlyLimit).toBe(100);
+    expect(result.delayBetweenEmails).toBeUndefined();
+    expect(result.hourlyLimit).toBeUndefined();
+  });
+
+  it('accepts explicit delay/hourlyLimit values', () => {
+    const result = scheduleEmailsSchema.parse({
+      subject: 'Hi',
+      body: 'Body',
+      recipients: ['a@b.com'],
+      startTime: new Date(Date.now() + 60_000).toISOString(),
+      delayBetweenEmails: 5,
+      hourlyLimit: 50,
+    });
+    expect(result.delayBetweenEmails).toBe(5);
+    expect(result.hourlyLimit).toBe(50);
   });
 });
 

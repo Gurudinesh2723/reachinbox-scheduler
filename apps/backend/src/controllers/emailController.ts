@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import fs from 'fs/promises';
 import { sendSuccess } from '../utils/apiResponse';
 import { ApiError } from '../utils/ApiError';
+import { env } from '../config/env';
 import { parseEmailListFile } from '../utils/emailListParser';
 import { scheduleEmails } from '../services/schedulingService';
 import { getScheduledEmails, getSentEmails, searchEmails, getEmailByIdForUser } from '../services/emailQueryService';
@@ -37,8 +38,10 @@ export async function schedule(req: Request, res: Response) {
     body: body.body,
     recipients: dedupeRecipients(body.recipients),
     startTime: body.startTime,
-    delayBetweenEmails: body.delayBetweenEmails,
-    hourlyLimit: body.hourlyLimit,
+    // Falls back to the configured MIN_EMAIL_DELAY / MAX_EMAILS_PER_HOUR when
+    // the client omits them - never a magic number duplicated in the schema.
+    delayBetweenEmails: body.delayBetweenEmails ?? env.MIN_EMAIL_DELAY,
+    hourlyLimit: body.hourlyLimit ?? env.MAX_EMAILS_PER_HOUR,
     userEmail: user.email,
     userName: user.name,
   });

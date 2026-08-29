@@ -1,7 +1,8 @@
 import { FormEvent, useState } from 'react';
 import { LeadListUpload } from './LeadListUpload';
+import { SenderPicker } from './SenderPicker';
 import { useScheduleEmails } from '../hooks/useEmails';
-import { useSenders } from '../hooks/useSenders';
+import { useSchedulingDefaults } from '../hooks/useConfig';
 import { useToast } from '../hooks/useToast';
 import { normalizeApiError } from '../lib/axios';
 import { ParsedRecipients } from '../types/domain';
@@ -22,14 +23,20 @@ export function ComposeModal({ onClose }: ComposeModalProps) {
   const [body, setBody] = useState('');
   const [senderId, setSenderId] = useState<string>('');
   const [startTime, setStartTime] = useState(defaultStartTime());
-  const [delayBetweenEmails, setDelayBetweenEmails] = useState(2);
-  const [hourlyLimit, setHourlyLimit] = useState(100);
+  // null = "not yet touched by the user" - falls back to the server's
+  // configured MIN_EMAIL_DELAY/MAX_EMAILS_PER_HOUR once loaded, rather than
+  // a value hardcoded in the frontend.
+  const [delayBetweenEmails, setDelayBetweenEmails] = useState<number | null>(null);
+  const [hourlyLimit, setHourlyLimit] = useState<number | null>(null);
   const [parsed, setParsed] = useState<ParsedRecipients | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const senders = useSenders();
+  const schedulingDefaults = useSchedulingDefaults();
   const scheduleEmails = useScheduleEmails();
   const { showToast } = useToast();
+
+  const effectiveDelay = delayBetweenEmails ?? schedulingDefaults.data?.minEmailDelay ?? 2;
+  const effectiveHourlyLimit = hourlyLimit ?? schedulingDefaults.data?.maxEmailsPerHour ?? 100;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -51,8 +58,8 @@ export function ComposeModal({ onClose }: ComposeModalProps) {
         recipients: parsed.validEmails,
         senderId: senderId || undefined,
         startTime: new Date(startTime).toISOString(),
-        delayBetweenEmails,
-        hourlyLimit,
+        delayBetweenEmails: effectiveDelay,
+        hourlyLimit: effectiveHourlyLimit,
       });
       showToast(`${result.totalScheduled} email(s) scheduled successfully`, 'success');
       onClose();
@@ -76,18 +83,7 @@ export function ComposeModal({ onClose }: ComposeModalProps) {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">From sender</label>
-            <select
-              value={senderId}
-              onChange={(e) => setSenderId(e.target.value)}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-            >
-              <option value="">Default sender</option>
-              {senders.data?.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.displayName} &lt;{s.email}&gt;
-                </option>
-              ))}
-            </select>
+            <SenderPicker value={senderId} onChange={setSenderId} />
           </div>
 
           <div>
@@ -131,7 +127,7 @@ export function ComposeModal({ onClose }: ComposeModalProps) {
               <input
                 type="number"
                 min={0}
-                value={delayBetweenEmails}
+                value={effectiveDelay}
                 onChange={(e) => setDelayBetweenEmails(Number(e.target.value))}
                 className="w-full rounded-md border border-slate-300 px-2 py-2 text-sm"
               />
@@ -141,7 +137,7 @@ export function ComposeModal({ onClose }: ComposeModalProps) {
               <input
                 type="number"
                 min={1}
-                value={hourlyLimit}
+                value={effectiveHourlyLimit}
                 onChange={(e) => setHourlyLimit(Number(e.target.value))}
                 className="w-full rounded-md border border-slate-300 px-2 py-2 text-sm"
               />
