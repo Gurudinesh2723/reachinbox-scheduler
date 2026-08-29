@@ -1,0 +1,226 @@
+openapi: 3.0.3
+info:
+  title: ReachInbox Email Scheduler API
+  version: 1.0.0
+  description: >
+    REST API for the Outbox Labs / ReachInbox.ai email job scheduler.
+    Authentication is via a signed, HTTP-only cookie session established
+    through Google OAuth. All /api routes except /api/auth/* require an
+    authenticated session.
+servers:
+  - url: http://localhost:4000
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: session
+  schemas:
+    ApiSuccess:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        data: {}
+        message: { type: string }
+    ApiError:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        error:
+          type: object
+          properties:
+            code: { type: string, example: VALIDATION_ERROR }
+            message: { type: string }
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string, format: email }
+        avatarUrl: { type: string, nullable: true }
+    Email:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        campaignId: { type: string, format: uuid }
+        recipient: { type: string, format: email }
+        subject: { type: string }
+        status: { type: string, enum: [scheduled, processing, sent, failed] }
+        scheduledAt: { type: string, format: date-time }
+        sentAt: { type: string, format: date-time, nullable: true }
+        failedAt: { type: string, format: date-time, nullable: true }
+        errorMessage: { type: string, nullable: true }
+        providerMessageId: { type: string, nullable: true }
+    ScheduleEmailsRequest:
+      type: object
+      required: [subject, body, recipients, startTime]
+      properties:
+        subject: { type: string }
+        body: { type: string }
+        recipients:
+          type: array
+          items: { type: string, format: email }
+        senderId: { type: string, format: uuid }
+        startTime: { type: string, format: date-time }
+        delayBetweenEmails: { type: integer, minimum: 0, default: 2, description: "Seconds between sends" }
+        hourlyLimit: { type: integer, minimum: 1, default: 100 }
+    ScheduleEmailsResponse:
+      type: object
+      properties:
+        campaignId: { type: string, format: uuid }
+        totalScheduled: { type: integer }
+        firstScheduledAt: { type: string, format: date-time }
+        lastScheduledAt: { type: string, format: date-time }
+paths:
+  /api/auth/google:
+    get:
+      summary: Start Google OAuth login
+      description: Redirects the browser to Google's OAuth consent screen.
+      responses:
+        '302': { description: Redirect to Google }
+  /api/auth/google/callback:
+    get:
+      summary: Google OAuth callback
+      description: Exchanges the authorization code, creates/updates the user, establishes a session, redirects to the frontend dashboard.
+      responses:
+        '302': { description: Redirect to frontend }
+  /api/auth/me:
+    get:
+      summary: Get the current authenticated user
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccess'
+                  - type: object
+                    properties: { data: { $ref: '#/components/schemas/User' } }
+        '401': { description: Not authenticated, content: { application/json: { schema: { $ref: '#/components/schemas/ApiError' } } } }
+  /api/auth/logout:
+    post:
+      summary: Log out and destroy the session
+      responses:
+        '200': { description: Logged out }
+  /api/emails/parse-recipients:
+    post:
+      summary: Upload and parse a CSV/TXT lead list
+      description: Streams the uploaded file, validates/deduplicates email addresses, returns counts before scheduling.
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '200': { description: Parsed recipient counts and valid email list }
+        '400': { description: Invalid file / empty file }
+  /api/emails/schedule:
+    post:
+      summary: Schedule a campaign of individual emails
+      description: Creates one Campaign row, one Email row per recipient, and one BullMQ delayed job per email. All fields are re-validated server-side.
+      security: [{ cookieAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ScheduleEmailsRequest' }
+      responses:
+        '201':
+          description: Scheduled
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiSuccess'
+                  - type: object
+                    properties: { data: { $ref: '#/components/schemas/ScheduleEmailsResponse' } }
+        '400': { description: Validation error }
+        '401': { description: Not authenticated }
+  /api/emails/scheduled:
+    get:
+      summary: List the current user's scheduled emails (paginated)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: page, in: query, schema: { type: integer, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, default: 20 } }
+      responses:
+        '200': { description: Paginated list of scheduled emails }
+  /api/emails/sent:
+    get:
+      summary: List the current user's sent/failed emails (paginated)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: page, in: query, schema: { type: integer, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, default: 20 } }
+      responses:
+        '200': { description: Paginated list of sent/failed emails }
+  /api/emails/search:
+    get:
+      summary: Search the current user's emails via Elasticsearch
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: q, in: query, schema: { type: string }, description: "matches recipient or subject" }
+        - { name: status, in: query, schema: { type: string, enum: [scheduled, processing, sent, failed] } }
+        - { name: page, in: query, schema: { type: integer, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, default: 20 } }
+      responses:
+        '200': { description: Search results }
+        '502': { description: Elasticsearch unavailable }
+  /api/emails/{id}:
+    get:
+      summary: Get a single email by id (must belong to the current user)
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Email detail }
+        '404': { description: Not found }
+  /api/campaigns:
+    get:
+      summary: List the current user's campaigns
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: List of campaigns }
+  /api/campaigns/{id}:
+    get:
+      summary: Get a single campaign with its emails
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Campaign detail }
+        '404': { description: Not found }
+  /api/senders:
+    get:
+      summary: List the current user's sender identities (SMTP credentials never included)
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: List of senders }
+  /api/slack/status:
+    get:
+      summary: Get the current user's Slack connection status
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: Connection status }
+  /api/slack/connect:
+    get:
+      summary: Start Slack OAuth
+      responses:
+        '302': { description: Redirect to Slack }
+  /api/slack/callback:
+    get:
+      summary: Slack OAuth callback
+      responses:
+        '302': { description: Redirect to frontend }
+  /api/slack/disconnect:
+    post:
+      summary: Disconnect Slack and revoke the stored token
+      security: [{ cookieAuth: [] }]
+      responses:
+        '200': { description: Disconnected }
