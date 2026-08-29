@@ -594,6 +594,13 @@ Once Docker + real Google/Slack credentials are available (≤5 minutes):
 
 ## Assumptions
 
+- The assignment references a Figma design; the linked file appears to be owned by Outbox Labs and
+  wasn't accessible for pixel-level comparison while building this. The dashboard was instead built
+  to a clean, professional layout that matches the brief's explicit structure (header with
+  user/avatar/logout, Scheduled/Sent tabs, Compose modal with subject/body/CSV upload/start
+  time/delay/hourly limit, tables with the specified columns, loading/empty/error states
+  throughout). If given access to the real file, spacing/color/typography can be tightened to match
+  more closely without touching any underlying logic.
 - A user's Google email is trusted as their unique identity; a second Google account with the same
   email is out of scope (Google itself does not allow that).
 - "Sender" is a lightweight per-user "from" identity, not a full mailbox connection; all sends
