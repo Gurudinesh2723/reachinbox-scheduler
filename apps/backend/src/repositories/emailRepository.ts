@@ -27,21 +27,28 @@ export function findEmailById(emailId: string) {
 
 /**
  * Atomic compare-and-swap: only succeeds if the row is still `scheduled`.
- * Postgres takes a row-level lock for the duration of the UPDATE, so if two
- * workers race to process the same email, the second UPDATE re-evaluates the
- * WHERE clause after the first transaction commits, sees status is no longer
- * `scheduled`, and affects zero rows. This is the mechanism that guarantees
- * only one worker can ever move an email out of `scheduled`.
+ * The single `updateMany` statement is what's atomic - Postgres takes a
+ * row-level lock for its duration, so if two workers race to process the
+ * same email, the second UPDATE re-evaluates the WHERE clause after the
+ * first commits, sees status is no longer `scheduled`, and affects zero
+ * rows. This is the mechanism that guarantees only one worker can ever move
+ * an email out of `scheduled`.
+ *
+ * Deliberately NOT wrapped in an interactive `prisma.$transaction()`: the
+ * follow-up `findUnique` doesn't need snapshot isolation with the write (we
+ * already know we're the one who claimed it), and an interactive
+ * transaction holds a dedicated connection from Prisma's pool for its full
+ * duration. Under concurrent worker jobs that was enough to exhaust a small
+ * pool and throw "Unable to start a transaction in the given time" - two
+ * independent, short-lived calls avoid that class of contention entirely.
  */
 export async function claimEmailForProcessing(emailId: string): Promise<Email | null> {
-  return prisma.$transaction(async (tx) => {
-    const result = await tx.email.updateMany({
-      where: { id: emailId, status: 'scheduled' },
-      data: { status: 'processing' },
-    });
-    if (result.count === 0) return null;
-    return tx.email.findUnique({ where: { id: emailId } });
+  const result = await prisma.email.updateMany({
+    where: { id: emailId, status: 'scheduled' },
+    data: { status: 'processing' },
   });
+  if (result.count === 0) return null;
+  return prisma.email.findUnique({ where: { id: emailId } });
 }
 
 export function markEmailSent(emailId: string, providerMessageId: string) {
