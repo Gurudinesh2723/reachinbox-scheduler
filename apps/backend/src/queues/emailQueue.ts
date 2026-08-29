@@ -20,13 +20,17 @@ export const emailQueue = new Queue<EmailJobData>(EMAIL_QUEUE_NAME, {
 });
 
 /**
- * Job IDs are deterministic (equal to the Email row's primary key) so that
- * re-running the same scheduling call/retry can never create two BullMQ jobs
- * for the same email - BullMQ treats adding a job with an existing id as a
- * no-op, which is the first layer of idempotency in this system.
+ * Job IDs are deterministic (derived from the Email row's primary key) so
+ * that re-running the same scheduling call/retry can never create two BullMQ
+ * jobs for the same email - BullMQ treats adding a job with an existing id as
+ * a no-op, which is the first layer of idempotency in this system.
+ *
+ * BullMQ uses `:` as its own internal Redis-key delimiter and rejects a
+ * custom job id containing one ("Custom Id cannot contain :"), so this uses
+ * `-` instead of the `:` an earlier version used.
  */
 export function emailJobId(emailId: string): string {
-  return `email:${emailId}`;
+  return `email-${emailId}`;
 }
 
 export async function scheduleEmailJob(params: { emailId: string; runAt: Date }): Promise<string> {

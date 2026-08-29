@@ -39,7 +39,7 @@ vi.mock('../../src/queues/emailQueue', () => ({
   EMAIL_QUEUE_NAME: 'email-scheduler',
   emailQueue: { add: vi.fn() },
   scheduleEmailJob: vi.fn().mockResolvedValue('job-1'),
-  emailJobId: (id: string) => `email:${id}`,
+  emailJobId: (id: string) => `email-${id}`,
 }));
 
 vi.mock('../../src/integrations/elasticsearch/emailIndex', () => ({
