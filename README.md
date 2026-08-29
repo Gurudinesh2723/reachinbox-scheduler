@@ -6,15 +6,25 @@ list, and the backend schedules one individually-tracked, durable, rate-limited 
 - sent through Ethereal SMTP, indexed in Elasticsearch, and observable through a live BullMQ
 dashboard.
 
-> **Honesty note on this submission's test status.** Every line of backend/frontend code in this
-> repo compiles, typechecks, and passes its automated test suite (see [Testing](#testing)). The
-> Ethereal SMTP integration was verified with a real live send during development (see
-> [Ethereal Setup](#ethereal-setup)). The Postgres/Redis/Elasticsearch Docker stack, Prisma
-> migration, and the Google/Slack OAuth flows are fully implemented and were **not exercised
-> end-to-end in this environment** because Docker Desktop's engine was not reachable from the build
-> sandbox this was authored in, and Google/Slack OAuth apps require credentials only a project owner
-> can provision. The [Demo Instructions](#demo-instructions) section tells you exactly how to
-> complete that verification yourself in a few minutes.
+> **Honesty note on this submission's test status.** Every line of backend/frontend code compiles,
+> typechecks, and passes its automated test suite - **31/31 passing**, with zero skipped, including
+> the real-Redis rate-limiter suite (see [Testing](#testing)). Docker Desktop's engine was not
+> reachable from the sandbox this was built in, so the full stack was instead run live against
+> PostgreSQL 18, Redis and Elasticsearch 8 installed in a WSL Ubuntu distro on the same machine
+> (functionally equivalent to `docker-compose.yml`'s images) and verified end-to-end by hand:
+> a real migration applied, individual per-recipient jobs scheduled and sent through real Ethereal
+> SMTP, Elasticsearch search returning real results, the Bull Board dashboard showing real queue
+> counts, **restart persistence confirmed by killing and independently verifying both the API and
+> worker processes were fully dead, waiting past a job's scheduled time, and restarting** (the
+> overdue job fired immediately), and the distributed rate limiter correctly rescheduling
+> over-the-limit sends to the next hour window with a deduplicated, crash-free Slack-not-connected
+> skip. That exercise also caught and fixed a real bug: BullMQ rejects a custom job id containing
+> `:`, which the original `emailJobId()` used (see the `fix:` commit). The one thing genuinely not
+> exercised end-to-end is Google/Slack OAuth itself, since that requires credentials only a project
+> owner can provision - session-based auth downstream of login was verified instead by issuing a
+> validly-signed session cookie directly (the exact mechanism `cookie-session` itself uses) against
+> the running server. The [Demo Instructions](#demo-instructions) section tells you how to complete
+> that last piece once you have Google/Slack app credentials.
 
 ---
 
@@ -213,11 +223,14 @@ docker compose down -v    # stop AND wipe volumes
 All three services use named, persistent volumes (`postgres_data`, `redis_data`, `es_data`) and
 `healthcheck` blocks so `docker compose ps` accurately reflects readiness before you run migrations.
 
-> This repo's automated test run and OpenAPI/type-check verification were done without Docker
-> access in this environment (see the note at the top of this document). The compose file, health
-> checks, and connection strings were nonetheless written and reviewed carefully - if
-> `docker compose up -d` fails for you, it is most likely a local Docker Desktop issue, not a bug in
-> this file.
+> Docker Desktop's engine wasn't reachable in the environment this was authored in (see the note at
+> the top of this document), so this exact compose file was not the thing that was actually run -
+> the same three services (Postgres, Redis, Elasticsearch) were instead run natively inside a WSL
+> Ubuntu distro and the full app was verified end-to-end against them, including a real Prisma
+> migration, real Ethereal sends, real Elasticsearch search, and a genuine restart-persistence test.
+> The compose file's images/config are equivalent (same major versions, same disabled-security ES
+> setup, same default ports), so it's expected to behave the same - if `docker compose up -d` fails
+> for you, it's most likely a local Docker Desktop issue, not a bug in this file.
 
 ## Environment Variables
 
@@ -257,8 +270,9 @@ never selected into any DTO/repository read path that reaches a controller.
 
 An initial migration is already generated and committed at
 `apps/backend/prisma/migrations/20260829000000_init/` (produced offline via
-`prisma migrate diff --from-empty`, so it's guaranteed to match `schema.prisma` exactly). To apply
-it against a running Postgres:
+`prisma migrate diff --from-empty`, so it's guaranteed to match `schema.prisma` exactly).
+`npx prisma migrate deploy` was actually run against a real PostgreSQL 18 instance during
+development and applied cleanly, creating all five tables. To apply it yourself:
 
 ```bash
 cd apps/backend
@@ -544,10 +558,9 @@ npm test
   Lua script - including 20 concurrent callers against a limit of 10 - against a **real** Redis
   instance, because the whole point of that module is atomicity a mock cannot faithfully
   represent. It auto-skips (rather than failing `npm test`) when Redis isn't reachable; run
-  `docker compose up -d` first to include it.
+  `docker compose up -d` (or point `REDIS_URL` at any reachable Redis) first to include it.
 
-Current result in this environment (no Docker access, so the Redis suite auto-skips):
-**28 passed, 3 skipped**, 0 failed.
+Current result with a real Redis reachable: **31 passed, 0 skipped, 0 failed.**
 
 `npm run lint` (both `apps/backend` and `apps/frontend`, ESLint 9 flat config + `typescript-eslint`)
 passes with **0 errors, 0 warnings**, alongside `npm run typecheck` and `npm run build` in both
@@ -671,7 +684,7 @@ Once Docker + real Google/Slack credentials are available (≤5 minutes):
 | Empty states | ✅ | `EmptyState` used on every async view |
 | Error handling | ✅ | Centralized `errorHandler.ts` (backend) + `ErrorState`/toasts (frontend) |
 | API documentation | ✅ | `/api-docs`, `src/config/openapi.yaml` |
-| Tests | ✅ | 27 passing (+3 auto-skipped without Redis); see [Testing](#testing) |
+| Tests | ✅ | 31/31 passing against real infra; see [Testing](#testing) |
 | Docker | ✅ | `docker-compose.yml`, Postgres + Redis + Elasticsearch, persistent volumes |
 | README | ✅ | This document |
 | Demo instructions | ✅ | See [Demo Instructions](#demo-instructions) |
