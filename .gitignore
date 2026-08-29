@@ -1,0 +1,29 @@
+node_modules/
+dist/
+build/
+coverage/
+
+# env
+.env
+.env.local
+apps/backend/.env
+apps/frontend/.env
+
+# logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# editors
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# prisma
+apps/backend/prisma/dev.db
+
+# misc
+*.tsbuildinfo
