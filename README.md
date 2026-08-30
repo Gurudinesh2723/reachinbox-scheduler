@@ -74,6 +74,7 @@ dashboard.
 - [Elasticsearch Search](#elasticsearch-search)
 - [Testing](#testing)
 - [Demo Instructions](#demo-instructions)
+- [Demo Videos](#demo-videos)
 - [Assumptions](#assumptions)
 - [Trade-offs](#trade-offs)
 - [Known Limitations](#known-limitations)
@@ -634,6 +635,17 @@ comfortably inside 5 minutes:
 15. With Slack connected, that same rate-limit hit produces a real message in the chosen Slack
     channel - **confirmed**: a real Slack app was connected to a real workspace, its bot was added to
     `#new-channel`, and the resulting notification was visually confirmed inside that channel.
+
+## Demo Videos
+
+### Main Assignment Demo
+https://www.loom.com/share/c4ec31e792c74860bd6a01d79112f490
+
+### Slack & Additional Demo
+https://www.loom.com/share/e62b90de675f459eac4cf5bd717803f7
+
+The first video is the main assignment walkthrough. The second video contains the Slack/additional
+demonstration.
 
 ## Assumptions
 
