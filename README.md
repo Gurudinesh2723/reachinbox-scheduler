@@ -1,6 +1,4 @@
 # ReachInbox Email Scheduler
-
-An Outbox Labs / ReachInbox.ai SDE internship technical assessment submission: a production-minded
 **Email Job Scheduler + Dashboard**. Users log in with Google, compose a campaign, upload a lead
 list, and the backend schedules one individually-tracked, durable, rate-limited email per recipient
 - sent through Ethereal SMTP, indexed in Elasticsearch, and observable through a live BullMQ
@@ -646,47 +644,6 @@ https://www.loom.com/share/e62b90de675f459eac4cf5bd717803f7
 
 The first video is the main assignment walkthrough. The second video contains the Slack/additional
 demonstration.
-
-## Assumptions
-
-- The assignment references a Figma design; the linked file appears to be owned by Outbox Labs and
-  wasn't accessible for pixel-level comparison while building this. The dashboard was instead built
-  to a clean, professional layout that matches the brief's explicit structure (header with
-  user/avatar/logout, Scheduled/Sent tabs, Compose modal with subject/body/CSV upload/start
-  time/delay/hourly limit, tables with the specified columns, loading/empty/error states
-  throughout). If given access to the real file, spacing/color/typography can be tightened to match
-  more closely without touching any underlying logic.
-- A user's Google email is trusted as their unique identity; a second Google account with the same
-  email is out of scope (Google itself does not allow that).
-- "Sender" is a lightweight per-user "from" identity, not a full mailbox connection; all sends
-  physically go out through one shared Ethereal transport, which is exactly what Ethereal is for -
-  it is a catch-all SMTP sink, not a real delivery network, so a distinct SMTP login per sender
-  would add complexity without adding realism in this environment. A user can add any number of
-  senders (`POST /api/senders`, or the "+ Add sender" control in the compose modal), and the hourly
-  rate limit/min-delay state is fully isolated per `senderId`, so this still exercises real
-  multi-sender behavior end-to-end.
-- CSV lead lists are assumed to have the email address in the first column when a comma is present;
-  a bare one-per-line text file is equally supported.
-- "Hourly limit" and "minimum delay" are properties of a *campaign* (and therefore effectively of
-  the sender actively running it) rather than a global server setting, since that is what the
-  compose form in the brief asks for; `.env` values are the defaults a campaign is created with.
-
-## Trade-offs
-
-- **No transactional outbox for job creation.** A full outbox pattern (write an "outbox" row in the
-  same transaction, have a separate poller publish it) would close the tiny window described in
-  [Scheduling Architecture](#scheduling-architecture) completely, but the brief explicitly asks not
-  to over-engineer this; the deterministic-job-id + startup-reconciliation approach closes the same
-  gap with far less machinery.
-- **Elasticsearch is eventually consistent with Postgres**, by design (see
-  [Elasticsearch Search](#elasticsearch-search)) - chosen over blocking email delivery on a search
-  index write succeeding.
-- **One shared Ethereal SMTP transport for all senders**, rather than per-sender SMTP credentials -
-  simpler, and Ethereal doesn't validate the `From` address against the authenticated account
-  anyway, so per-sender credentials would not have added any real-world fidelity here.
-- **Rate limiting is per-sender, not per-user or global** - matches "reached the hourly limit of a
-  sender" in the brief's Slack message copy, and is the more realistic real-world unit (a sending
-  domain/mailbox is what an ESP actually throttles).
 
 ## Known Limitations
 
